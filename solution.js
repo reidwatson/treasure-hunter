@@ -9,6 +9,8 @@ function Stacker() {
 	// Replace this with your own wizardry
 	let stack = [];
 	let visited = new Set();
+	let walkable = new Set();//adjascent blocks to visited locations that can be walked over
+
 	let deadEnds = new Set();
 
 	let staircase = new Map();
@@ -35,10 +37,11 @@ function Stacker() {
 
 	let climbTower;
 
+	let abortMission = false;
 
-
-	this.turn = function (cell) {
+	function getNextTurn(cell) {
 		try {
+
 			let action = '';
 
 			let currentPosition = path[path.length - 1];
@@ -50,24 +53,32 @@ function Stacker() {
 			//do any predetermined moves
 			if (nextMoves.length > 0) {
 
-				//if we are currently on a staircase position, update its value
-				if (staircase.has(JSON.stringify(currentPosition))) {
-					let thisCell = staircase.get(JSON.stringify(currentPosition));
-					staircase.set(JSON.stringify(currentPosition), { level: thisCell.level, currentLevel: cell.level, route: thisCell.route })
-				}
-
-				let theMove = nextMoves[0];
-				nextMoves.shift();
-
-				//if this is a directional move, add it to the path.
-				if (theMove !== 'pickup' && theMove !== 'drop') {
-					let nextPosition2 = getNextPosition(currentPosition, theMove, 1);
-					path = path.concat([nextPosition2]);
+				if (abortMission) {
+					abortMission = false;
+					nextMoves = [];
 				} else {
-					holdingBlock = !holdingBlock;//toggle this boolean we use for action logic further down
+
+
+					//if we are currently on a staircase position, update its value
+					if (staircase.has(JSON.stringify(currentPosition))) {
+						let thisCell = staircase.get(JSON.stringify(currentPosition));
+						staircase.set(JSON.stringify(currentPosition), { level: thisCell.level, currentLevel: cell.level, route: thisCell.route })
+					}
+
+					let theMove = nextMoves[0];
+					nextMoves.shift();
+
+					// //if this is a directional move, add it to the path.
+					if (theMove !== 'pickup' && theMove !== 'drop') {
+						// let nextPosition2 = getNextPosition(currentPosition, theMove, 1);
+						// path = path.concat([nextPosition2]);
+					} else {
+						holdingBlock = !holdingBlock;//toggle this boolean we use for action logic further down
+					}
+
+					return theMove;
 				}
 
-				return theMove;
 			}
 
 			if (blocks.size > 38) {//!foundEnoughBlocks && blocks.size > 34
@@ -101,13 +112,20 @@ function Stacker() {
 							//do the first move of the tower sweep
 							let theMove = nextMoves[0];
 							nextMoves.shift();
-							let nextPosition2 = getNextPosition(currentPosition, theMove, 3);
-							path = path.concat([nextPosition2]);
+							// let nextPosition2 = getNextPosition(currentPosition, theMove, 3);
+							// path = path.concat([nextPosition2]);
 							return theMove;
 						}
 	
 						//check for adjascent blocks here.
-	
+						// if (cell[direction].type == 2 && cell[direction].level == 1) {
+
+						// 	let isStaircase = staircase.get(JSON.stringify(nextPosition));
+						// 	if (!isStaircase) {
+						// 		blocks.set(JSON.stringify(nextPosition), { level: cell[direction].level, available: true });
+						// 		walkable.add(JSON.stringify(nextPosition));
+						// 	}
+						// }
 					}
 				}
 
@@ -140,9 +158,8 @@ function Stacker() {
 					let theMove = nextMoves[0];
 					nextMoves.shift();
 
-					let nextPosition2 = getNextPosition(currentPosition, theMove, 4);
-
-					path = path.concat([nextPosition2]);
+					// let nextPosition2 = getNextPosition(currentPosition, theMove, 4);
+					// path = path.concat([nextPosition2]);
 
 					return theMove;
 				}
@@ -189,7 +206,7 @@ function Stacker() {
 					// stack.push(direction);
 
 					// Recursive DFS call
-					path = path.concat([nextPosition]);
+					//path = path.concat([nextPosition]);
 					return direction;
 
 					// // Backtrack if the target was not found
@@ -237,7 +254,7 @@ function Stacker() {
 
 							//go there and pick it up on the next turn.
 							nextMoves.push('pickup');
-							path = path.concat([nextPosition]);
+							//path = path.concat([nextPosition]);
 
 							return direction;
 						} else {
@@ -256,8 +273,8 @@ function Stacker() {
 					//do the first move of the route to the staircase
 					let theMove = nextMoves[0];
 					nextMoves.shift();
-					let nextPosition2 = getNextPosition(currentPosition, theMove, 7);
-					path = path.concat([nextPosition2]);
+					//let nextPosition2 = getNextPosition(currentPosition, theMove, 7);
+					//path = path.concat([nextPosition2]);
 					return theMove;
 
 					// //right now, just do something random.
@@ -308,15 +325,27 @@ function Stacker() {
 							// 	return theMove;
 							// }
 							//do the first move of the route to the staircase
+							if (nextMoves.length === 0) {
+								let randomMove;
+								var n = Math.random() * 4 >> 0;
+								if (n == 0) randomMove = "left";
+								if (n == 1) randomMove = "up";
+								if (n == 2) randomMove = "right";
+								if (n == 3) randomMove = "down";
+								nextMoves.push(randomMove);
+							}
+
+
 							let theMove = nextMoves[0];
 							nextMoves.shift();
 
 							if (theMove !== 'drop' && theMove !== 'pickup') {
-								let nextPosition2 = getNextPosition(currentPosition, theMove, 8);
-								path = path.concat([nextPosition2]);
+								//let nextPosition2 = getNextPosition(currentPosition, theMove, 8);
+								//path = path.concat([nextPosition2]);
 							}
 
 							return theMove;
+
 						}
 
 						//route to the staircase
@@ -335,8 +364,8 @@ function Stacker() {
 					//do the first move of the route to the staircase
 					let theMove = nextMoves[0];
 					nextMoves.shift();
-					let nextPosition2 = getNextPosition(currentPosition, theMove, 9);
-					path = path.concat([nextPosition2]);
+					// let nextPosition2 = getNextPosition(currentPosition, theMove, 9);
+					// path = path.concat([nextPosition2]);
 					return theMove;
 				}
 
@@ -362,6 +391,72 @@ function Stacker() {
 		catch (e) {
 			console.log(e);
 		}
+	}
+
+
+
+	let movementTurns = 0;
+	let actionTurns = 0;
+	let randomMovesInARow = 0;
+	this.turn = function (cell) {
+
+		let turn = getNextTurn(cell);
+
+		if (turn === '') {
+			console.log('worst possible outcome');
+		}
+
+		if (turn !== 'pickup' && turn !== 'drop') {
+
+
+			let currentPosition = path[path.length - 1];
+
+			if (cell[turn].type === 1 || (cell[turn].level - cell.level > 1)) {//don't walk into walls or unclimbable objects
+				
+				
+				if (randomMovesInARow > 10) {
+					nextMoves = findShortestPath(currentPosition, [0,0]);//try to go back to origin.
+					//it should try to go to some new random tile so it can break out of this error
+					if (nextMoves.length > 1) {
+						let theMove = nextMoves[0];
+						let nextPosition2 = getNextPosition(currentPosition, theMove, -16);
+						path = path.concat([nextPosition2]);
+						movementTurns++;
+						return theMove;
+					}
+				}
+
+				
+				abortMission = true;
+
+				let randomMove;
+				var n = Math.random() * 4 >> 0;
+				if (n == 0) randomMove = "left";
+				if (n == 1) randomMove = "up";
+				if (n == 2) randomMove = "right";
+				if (n == 3) randomMove = "down";
+
+				randomMovesInARow++;
+
+				let nextPosition2 = getNextPosition(currentPosition, randomMove, -1);
+				path = path.concat([nextPosition2]);
+				movementTurns++;
+				return randomMove;
+			} else {
+				let nextPosition2 = getNextPosition(currentPosition, turn, -2);
+				path = path.concat([nextPosition2]);
+				movementTurns++;
+			}
+
+
+		} else {
+			actionTurns++;
+		}
+
+		randomMovesInARow = 0;
+
+		console.log(`path: ${movementTurns} | total: ${movementTurns+actionTurns}`);
+		return turn;
 	}
 
 
@@ -735,6 +830,7 @@ function Stacker() {
 				break;
 		}
 
+		//stairs 2-7
 		for (let i = 0; i < stairs.length; i++) {
 			staircaseMap.set(JSON.stringify(stairs[i].coords), { level: i + 2, currentLevel: 0, route: stairs[i].route });
 		}
@@ -780,7 +876,11 @@ function Stacker() {
 		let eligibleStairs = 0;
 		for (let [key, value] of staircase) {
 			if (value.level >= targetStairLevel && value.currentLevel < targetStairLevel) {
-				eligibleStairs++;
+				if (value.level == value.currentLevel) {
+					continue;
+				} else {
+					eligibleStairs++;
+				}
 			}
 
 		}
@@ -808,6 +908,12 @@ function Stacker() {
 			//if (value.level !== value.currentLevel) {
 			if (value.level >= targetStairLevel && value.currentLevel < targetStairLevel) {
 				//find the moves required to get from staircase start to this block
+				
+				//avoid stacking above a staircase's target level
+				if (value.level == value.currentLevel) {
+					continue;
+				}
+				
 				let route = value.route;
 
 				if (route[0] !== '') {
@@ -856,7 +962,7 @@ function Stacker() {
 			
 			let output = recursivePath(newPath, end, deadEnds2);
 
-			if (output.length === 1) {
+			if (output?.length === 1) {
 				//if a valid path could not be found, just move to the closest valid block.
 				if (emergencyMoves.size > 0) {
 					output.push(Array.from(emergencyMoves)[0]);
@@ -877,9 +983,13 @@ function Stacker() {
 				}	
 			}
 
+			if (JSON.stringify(output[output?.length-1]) !== JSON.stringify(end)) {
+				console.log('IT DIDNT PATH TO THE END!')
+			}
+
 			// Generate moves by backtracking from start to end
 			let moves = [];
-			for (let i = 0; i < output.length - 1; i++) {
+			for (let i = 0; i < output?.length - 1; i++) {
 				let fromPos = output[i];
 				let toPos = output[i + 1];
 				let xDiff = toPos[0] - fromPos[0];
@@ -961,18 +1071,20 @@ function Stacker() {
 				}
 
 				let isVisited = path.find(p => p[0] === move[0] && p[1] === move[1]);
-				
+
+				//let isWalkable = walkable.has(JSON.stringify(move));
+				let isWalkable = false;
 				let alreadyThere = newPath.find(p => p[0] === move[0] && p[1] === move[1]);
 				
 				let isDeadEnd = deadEnds2.find(p => p[0] === move[0] && p[1] === move[1]);
 				let isStaircase = staircase.has(JSON.stringify(move));
 
 				//as long as this isnt a staircase, go there as a last resort.
-				if (newPath.length === 1 && !isStaircase && isVisited) {
+				if (!isStaircase && (isVisited || isWalkable)) {
 					emergencyMoves.add(move);
 				}
 
-				if (isVisited && !alreadyThere && !isDeadEnd && !isStaircase) {
+				if ((isVisited || isWalkable) && !alreadyThere && !isDeadEnd && !isStaircase) {
 					newPath.push(move);
 					let pathResult = recursivePath(newPath, end, deadEnds2);
 					if(pathResult) {
@@ -1001,6 +1113,7 @@ function Stacker() {
 
 		} catch (e) {
 			console.log(e);
+			return [newPath[0]];
 		}
 	}
 
