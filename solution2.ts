@@ -1,4 +1,4 @@
-function Stacker() {
+function Stacker2() {
 
 	const EMPTY = 0, WALL = 1, BLOCK = 2, GOLD = 3;
 
@@ -11,20 +11,20 @@ function Stacker() {
 	let blocks = new Map();//stores all known blocks that can be routed to, and their levels
 
 	let path = [[0, 0]];//stores all of the moves taken around the board.
-	let nextMoves = [];//queue for future moves, allows you to do complex maneuvers
+	let nextMoves = <any>[];//queue for future moves, allows you to do complex maneuvers
 
 	let foundTower = false;//have we found the tower yet? first essential step
 	let staircaseCoords;//refers to the start of the staircase, so we can route back to it whenever.
 	let holdingBlock = false;//are we currently carrying a block?
 
 	const minimumBlocksToFind = 34;//minimum block amount is 28. you can set this higher to have it know more available blocks when building the tower.
-	let towerSweep = [];//instructions for scoping out the tower when discovered
+	let towerSweep = <any>[];//instructions for scoping out the tower when discovered
 	let targetStairLevel = 1;//what layer of the staircase are we currently working on?
 	let climbTower;//inscructions for climbing the tower once the staircase is complete
 
 
 	//entrypoint function
-	this.turn = function (cell) {
+	this.turn = function (cell:any) {
 
 		let turn = getNextTurn(cell);
 
@@ -42,7 +42,7 @@ function Stacker() {
 	}
 
 	//decides what to do next
-	function getNextTurn(cell) {
+	function getNextTurn(cell:any) {
 
 		let currentPosition = path[path.length - 1];
 
@@ -67,7 +67,6 @@ function Stacker() {
 			if (!foundTower && target.type == GOLD) {
 
 				staircaseCoords = currentPosition;
-				towerCoords = targetPosition;
 				foundTower = true;//also set a boolean for more clear code logic
 
 				staircase = generateStaircaseCoords(currentPosition, direction, cell);
@@ -186,7 +185,7 @@ function Stacker() {
 				if (isBlock) {
 
 					//go there and pick it up on the next turn.
-					nextMoves.push('pickup');
+					nextMoves = nextMoves.push('pickup');
 					return direction;
 				} else {
 					continue;
@@ -232,7 +231,7 @@ function Stacker() {
 	}
 
 	//given a coordinate position [x,y] and a direction [up,down,left,right], find what the next coordinate pair would be
-	function getNextPosition(currentPosition, direction) {
+	function getNextPosition(currentPosition:any, direction:any) {
 		// Extract x and y coordinates from currentPosition
 		let [x, y] = currentPosition;
 
@@ -259,7 +258,7 @@ function Stacker() {
 	}
 
 	//use manhattan distance to find the closest block to the current location
-	function findClosestBlock(position) {
+	function findClosestBlock(position:any) {
 		let closestBlock = null;
 		let minDistance = Infinity;
 
@@ -298,11 +297,11 @@ function Stacker() {
 	}
 
 	//hard-code the tower maneuvers since there aren't that many possibilities.
-	function generateStaircaseCoords(start, towerDirection, cell) {
+	function generateStaircaseCoords(start:any, towerDirection:any, cell:any) {
 		let staircaseMap = new Map();
 		staircaseMap.set(JSON.stringify(start), { level: 1, currentLevel: cell.level, route: [''] });
 
-		let stairs = [];
+		let stairs = <any>[];
 		switch (towerDirection) {
 			case 'up':
 				stairs.push({ coords: [start[0] + 1, start[1]], route: ['right'] });//stair 2
@@ -355,7 +354,7 @@ function Stacker() {
 	}
 
 	//takes in a path of moves and reverses them.
-	function reverseMoves(moves) {
+	function reverseMoves(moves:any) {
 		const oppositeMoves = {
 			'up': 'down',
 			'down': 'up',
@@ -368,9 +367,9 @@ function Stacker() {
 	}
 
 	//get a random move for your current position. used as an insurance for when a move cannot be determined 
-	function getRandomMove(position) {
+	function getRandomMove(position:any) {
 		let moves = ["left", "up", "right", "down"];
-		let shuffledMoves = [];
+		let shuffledMoves: string[] = [];
 
 		// Shuffle the moves array
 		while (moves.length > 0) {
@@ -401,7 +400,7 @@ function Stacker() {
 			targetStairLevel++;
 		}
 
-		let moves = [];
+		let moves: string[] = [];
 		for (let [key, value] of staircase) {
 			if (value.level >= targetStairLevel && value.currentLevel < targetStairLevel) {
 
@@ -428,7 +427,7 @@ function Stacker() {
 
 	//finds a route from point a to point b
 	//where the path is walkable
-	function findShortestPath(start, end) {
+	function findShortestPath(start:any, end:any) {
 
 		let newPath = [start]; // Initialize the path with the start point
 		let deadEnds2 = [];     // Initialize an empty array for dead ends
@@ -442,7 +441,7 @@ function Stacker() {
 		}
 
 		// Generate moves by backtracking from start to end
-		let moves = [];
+		let moves: string[] = [];
 		for (let i = 0; i < output?.length - 1; i++) {
 			let fromPos = output[i];
 			let toPos = output[i + 1];
@@ -466,7 +465,7 @@ function Stacker() {
 	}
 
 	//recursive helper for finding the shortest path. does a kind of DFS to route from 1 coordinate to another.
-	function recursivePath(newPath, end, deadEnds2) {
+	function recursivePath(newPath: any, end: any, deadEnds2: any) {
 		let start = newPath[newPath.length - 1];
 
 		if (!end) {
@@ -484,7 +483,7 @@ function Stacker() {
 		//added in order of best to worst
 		//it tries to get closer to the 'end' coordinates first,
 		//and if it can't get directly closer, advance to another tile and see if a path can be found from there.
-		let goodMoves = new Set();
+		let goodMoves = new Set<any>();
 
 		let [xDiff, yDiff] = [Math.sign(end[0] - start[0]), Math.sign(end[1] - start[1])];
 		goodMoves.add(JSON.stringify([start[0] + xDiff, start[1]]));
@@ -504,8 +503,8 @@ function Stacker() {
 
 		//attempt to move in each of the 'goodMoves' directions
 		let invalidMoves = 0;
-		for (let move of goodMoves) {
-			move = JSON.parse(move);
+		for (let m of goodMoves) {
+			let move = JSON.parse(m);
 
 			//make sure this tile is not a dead end
 			let isDeadEnd = deadEnds2.find(p => p[0] === move[0] && p[1] === move[1]);
