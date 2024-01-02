@@ -1,42 +1,29 @@
 function Stacker() {
 
-	var
-		EMPTY = 0,
-		WALL = 1,
-		BLOCK = 2,
-		GOLD = 3;
+	const EMPTY = 0, WALL = 1, BLOCK = 2, GOLD = 3;
 
-	// Replace this with your own wizardry
-	let visited = new Set();
+	//globally scoped variables
+	let visited = new Set();//coordinates that we have walked on
 	let walkable = new Set();//blocks that can be walked over: empty squares, level 1 blocks, no walls no staircase tiles.
-	let walls = new Set();//known walls
+	let deadEnds = new Set();//dead ends when searching for the tower / sufficient blocks
 
-	let deadEnds = new Set();
+	let staircase = new Map();//stores coordinates as well as data about the staircase progress / layout
+	let blocks = new Map();//stores all known blocks that can be routed to, and their levels
 
-	let staircase = new Map();
-	let blocks = new Map();
+	let path = [[0, 0]];//stores all of the moves taken around the board.
+	let nextMoves = [];//queue for future moves, allows you to do complex maneuvers
 
-	let path = [[0, 0]]
+	let foundTower = false;//have we found the tower yet? first essential step
+	let staircaseCoords;//refers to the start of the staircase, so we can route back to it whenever.
+	let holdingBlock = false;//are we currently carrying a block?
 
-	let foundTower = false;
-
-	let staircaseCoords;
-	let holdingBlock = false;
-
-	let nextMoves = [];
-
-	let towerSweep = [];
-
-	const minimumBlocksToFind = 34;
-
-	let climbTower;
-
-		//this needs to be initialized to 1 (build level 1)
-	//and set to 2 once 1 is complete, and so on until level 7 is complete.
-	let targetStairLevel = 1;
+	const minimumBlocksToFind = 28;//minimum block amount is 28. you can set this higher to have it know more available blocks when building the tower.
+	let towerSweep = [];//instructions for scoping out the tower when discovered
+	let targetStairLevel = 1;//what layer of the staircase are we currently working on?
+	let climbTower;//inscructions for climbing the tower once the staircase is complete
 
 
-
+	//entrypoint function
 	this.turn = function (cell) {
 
 		let turn = getNextTurn(cell);
@@ -54,14 +41,14 @@ function Stacker() {
 		return turn;
 	}
 
-	//decides what to do next.
+	//decides what to do next
 	function getNextTurn(cell) {
 
 		let currentPosition = path[path.length - 1];
 
 		visited.add(JSON.stringify(currentPosition));
 
-		//evaluate what can be seen in this state
+		//ALWAYS: evaluate the current block and our surrounding 4 blocks.
 		for (let direction of ['', 'left', 'up', 'right', 'down']) {
 
 
@@ -90,9 +77,7 @@ function Stacker() {
 				nextMoves = towerSweep;
 
 				//do the first move of the tower sweep
-				let theMove = nextMoves[0];
-				nextMoves.shift();
-				return theMove;
+				return doNextMove();
 			}
 
 
@@ -110,9 +95,6 @@ function Stacker() {
 						blocks.set(JSON.stringify(targetPosition), { level: target.level, available: false });
 					}
 				}
-				else if (target.type == WALL) {//walls
-					walls.add(JSON.stringify(targetPosition));
-				}
 				else if (target.type == EMPTY) {//empty blocks
 					walkable.add(JSON.stringify(targetPosition));
 				}
@@ -121,11 +103,7 @@ function Stacker() {
 
 		//do any predetermined moves
 		if (nextMoves.length > 0) {
-
-			let theMove = nextMoves[0];
-			nextMoves.shift();
-
-			return theMove;
+			return doNextMove();
 		}
 
 		//EXPLORE MODE: find the tower OR find more blocks. once found, build the staircase.
@@ -146,10 +124,10 @@ function Stacker() {
 				//check if the neighbor is the tower
 
 				if (isWall || alreadyVisited) {
+
 					if (encounteredObstacles === 3) {
-						//backtrack = true;
 						deadEnds.add(JSON.stringify(currentPosition));//if we encounter 3 obstacles, mark this as a dead end and don't revisit it
-						
+
 						let goBackIndex = 1;
 
 						//backwards transverse to find the most recent path element that isn't a dead end
@@ -159,18 +137,16 @@ function Stacker() {
 								break;
 							}
 						}
-						
+
 						while (nextMoves.length === 0) {
 							let backPosition = path[path.length - 1 - goBackIndex];
-							nextMoves = findShortestPath(currentPosition, backPosition);
+							if (!deadEnds.has(JSON.stringify(backPosition))) {
+								nextMoves = findShortestPath(currentPosition, backPosition);
+							}
 							goBackIndex++;
 						}
-	
-						//do the first move (make this a function)
-						let theMove = nextMoves[0];
-						nextMoves.shift();
-	
-						return theMove;
+
+						return doNextMove();
 					} else {
 						encounteredObstacles++;
 						continue; // Skip this iteration if already visited
@@ -180,7 +156,7 @@ function Stacker() {
 
 				return direction;
 			}
-		} 
+		}
 
 		//FETCH MODE: find the nearest block to fetch, in order to build the staircase
 		else if (!holdingBlock) {
@@ -194,7 +170,6 @@ function Stacker() {
 			}
 
 			// search for a new block
-			let encounteredObstacles = 0;
 			for (let direction of ['left', 'up', 'right', 'down']) {
 
 				let nextPosition = getNextPosition(currentPosition, direction);
@@ -229,7 +204,7 @@ function Stacker() {
 			let theMove = nextMoves[0];
 			nextMoves.shift();
 			return theMove;
-		} 
+		}
 
 		//BUILD MODE: we are holding a block. use it to build the staircase
 		else {
@@ -239,7 +214,7 @@ function Stacker() {
 			if (JSON.stringify(staircaseCoords) === JSON.stringify(currentPosition)) {
 
 				//get the next moves to build the staircase
-				nextMoves = buildNextStair(currentPosition);
+				nextMoves = buildNextStair();
 
 				let theMove = nextMoves[0];
 				nextMoves.shift();
@@ -276,10 +251,19 @@ function Stacker() {
 		}
 	}
 
+	//process the next move on the stack
+	function doNextMove() {
+		let theMove = nextMoves[0];
+		nextMoves.shift();
+		return theMove;
+	}
+
 	//use manhattan distance to find the closest block to the current location
 	function findClosestBlock(position) {
 		let closestBlock = null;
 		let minDistance = Infinity;
+
+		let aBlock;
 
 		for (let [key, value] of blocks) {
 			if (!value.available) continue;
@@ -300,59 +284,64 @@ function Stacker() {
 			}
 		}
 
-		//set this to be cooked
-		let findBlock = blocks.get(JSON.stringify(closestBlock));
-		blocks.set(JSON.stringify(closestBlock), { level: findBlock.level - 1, available: false });
-		
+		if (closestBlock) {
+			//set this to be cooked
+			let findBlock = blocks.get(JSON.stringify(closestBlock));
+			blocks.set(JSON.stringify(closestBlock), { level: findBlock.level - 1, available: false });
+		} else {
+			return aBlock;
+		}
+
+
 
 		return closestBlock;
 	}
 
+	//hard-code the tower maneuvers since there aren't that many possibilities.
 	function generateStaircaseCoords(start, towerDirection, cell) {
-
 		let staircaseMap = new Map();
 		staircaseMap.set(JSON.stringify(start), { level: 1, currentLevel: cell.level, route: [''] });
 
 		let stairs = [];
 		switch (towerDirection) {
 			case 'up':
-				stairs.push({coords: [start[0]+1, start[1]],   route: ['right'] });//stair 3
-				stairs.push({coords: [start[0]+1, start[1]+1], route: ['right','up'] });//stair 3
-				stairs.push({coords: [start[0]+1, start[1]+2], route: ['right','up','up'] });//stair 4
-				stairs.push({coords: [start[0], start[1]+2],   route: ['right','up','up','left'] });//stair 5
-				stairs.push({coords: [start[0]-1, start[1]+2], route: ['right','up','up','left','left'] });//stair 6
-				stairs.push({coords: [start[0]-1, start[1]+1], route: ['right','up','up','left','left','down'] });//stair 7
-				towerSweep = ['right','up','up','left','left','down','down','right'];
+				stairs.push({ coords: [start[0] + 1, start[1]], route: ['right'] });//stair 2
+				stairs.push({ coords: [start[0] + 1, start[1] + 1], route: ['right', 'up'] });//stair 3
+				stairs.push({ coords: [start[0] + 1, start[1] + 2], route: ['right', 'up', 'up'] });//stair 4
+				stairs.push({ coords: [start[0], start[1] + 2], route: ['right', 'up', 'up', 'left'] });//stair 5
+				stairs.push({ coords: [start[0] - 1, start[1] + 2], route: ['right', 'up', 'up', 'left', 'left'] });//stair 6
+				stairs.push({ coords: [start[0] - 1, start[1] + 1], route: ['right', 'up', 'up', 'left', 'left', 'down'] });//stair 7
+				towerSweep = ['right', 'up', 'up', 'left', 'left', 'down', 'down', 'right'];//directions to go around the tower when discovered, to scope out the surroundings.
 				climbTower = 'right';
 				break;
 			case 'down':
-				stairs.push({coords: [start[0]-1, start[1]],   route: ['left'] });//stair 2
-				stairs.push({coords: [start[0]-1, start[1]-1], route: ['left','down'] });//stair 3
-				stairs.push({coords: [start[0]-1, start[1]-2], route: ['left','down','down']  });//stair 4
-				stairs.push({coords: [start[0], start[1]-2],   route: ['left','down','down','right'] });//stair 5
-				stairs.push({coords: [start[0]+1, start[1]-2], route: ['left','down','down','right','right'] });//stair 6
-				stairs.push({coords: [start[0]+1, start[1]-1], route: ['left','down','down','right','right','up'] });//stair 74
-				towerSweep = ['left','down','down','right','right','up','up','left'];
+				stairs.push({ coords: [start[0] - 1, start[1]], route: ['left'] });
+				stairs.push({ coords: [start[0] - 1, start[1] - 1], route: ['left', 'down'] });
+				stairs.push({ coords: [start[0] - 1, start[1] - 2], route: ['left', 'down', 'down'] });
+				stairs.push({ coords: [start[0], start[1] - 2], route: ['left', 'down', 'down', 'right'] });
+				stairs.push({ coords: [start[0] + 1, start[1] - 2], route: ['left', 'down', 'down', 'right', 'right'] });
+				stairs.push({ coords: [start[0] + 1, start[1] - 1], route: ['left', 'down', 'down', 'right', 'right', 'up'] });
+				towerSweep = ['left', 'down', 'down', 'right', 'right', 'up', 'up', 'left'];
 				climbTower = 'left';
 				break;
 			case 'left':
-				stairs.push({coords: [start[0], start[1]+1],   route: ['up']});//stair 2
-				stairs.push({coords: [start[0]-1, start[1]+1], route: ['up','left']});//stair 3
-				stairs.push({coords: [start[0]-2, start[1]+1], route: ['up','left','left']});//stair 4
-				stairs.push({coords: [start[0]-2, start[1]],   route: ['up','left','left','down']});//stair 5
-				stairs.push({coords: [start[0]-2, start[1]-1], route: ['up','left','left','down','down']});//stair 6
-				stairs.push({coords: [start[0]-1, start[1]-1], route: ['up','left','left','down','down','right']});//stair 7
-				towerSweep = ['up','left','left','down','down','right','right','up'];
+				stairs.push({ coords: [start[0], start[1] + 1], route: ['up'] });//stair 2
+				stairs.push({ coords: [start[0] - 1, start[1] + 1], route: ['up', 'left'] });//stair 3
+				stairs.push({ coords: [start[0] - 2, start[1] + 1], route: ['up', 'left', 'left'] });//stair 4
+				stairs.push({ coords: [start[0] - 2, start[1]], route: ['up', 'left', 'left', 'down'] });//stair 5
+				stairs.push({ coords: [start[0] - 2, start[1] - 1], route: ['up', 'left', 'left', 'down', 'down'] });//stair 6
+				stairs.push({ coords: [start[0] - 1, start[1] - 1], route: ['up', 'left', 'left', 'down', 'down', 'right'] });//stair 7
+				towerSweep = ['up', 'left', 'left', 'down', 'down', 'right', 'right', 'up'];
 				climbTower = 'up';
 				break;
 			case 'right':
-				stairs.push({coords: [start[0], start[1]-1],   route: ['down']});//stair 2
-				stairs.push({coords: [start[0]+1, start[1]-1], route: ['down','right']});//stair 3
-				stairs.push({coords: [start[0]+2, start[1]-1], route: ['down','right','right']});//stair 4
-				stairs.push({coords: [start[0]+2, start[1]],   route: ['down','right','right','up']});//stair 5
-				stairs.push({coords: [start[0]+2, start[1]+1], route: ['down','right','right','up','up']});//stair 6
-				stairs.push({coords: [start[0]+1, start[1]+1], route: ['down','right','right','up','up','left']});//stair 7
-				towerSweep = ['down','right','right','up','up','left','left','down'];
+				stairs.push({ coords: [start[0], start[1] - 1], route: ['down'] });//stair 2
+				stairs.push({ coords: [start[0] + 1, start[1] - 1], route: ['down', 'right'] });//stair 3
+				stairs.push({ coords: [start[0] + 2, start[1] - 1], route: ['down', 'right', 'right'] });//stair 4
+				stairs.push({ coords: [start[0] + 2, start[1]], route: ['down', 'right', 'right', 'up'] });//stair 5
+				stairs.push({ coords: [start[0] + 2, start[1] + 1], route: ['down', 'right', 'right', 'up', 'up'] });//stair 6
+				stairs.push({ coords: [start[0] + 1, start[1] + 1], route: ['down', 'right', 'right', 'up', 'up', 'left'] });//stair 7
+				towerSweep = ['down', 'right', 'right', 'up', 'up', 'left', 'left', 'down'];
 				climbTower = 'down';
 				break;
 		}
@@ -365,144 +354,85 @@ function Stacker() {
 		return staircaseMap;
 	}
 
-    function reverseMoves(moves) {
-		let reversedMoves = [];
-		for (let i=moves.length-1; i>=0; i--) {
-			switch (moves[i]) {
-				case 'up':
-					reversedMoves.push('down');
-					break;
-				case 'down':
-					reversedMoves.push('up');
-					break;
-				case 'left':
-					reversedMoves.push('right');
-					break;
-				case 'right':
-					reversedMoves.push('left');
-					break;
-			}
-		}
-		return reversedMoves;
+	//takes in a path of moves and reverses them.
+	function reverseMoves(moves) {
+		const oppositeMoves = {
+			'up': 'down',
+			'down': 'up',
+			'left': 'right',
+			'right': 'left'
+		};
+
+		// Create a copy of the array and then reverse it
+		return moves.slice().reverse().map(move => oppositeMoves[move]);
 	}
 
+	//get a random move for your current position. used as an insurance for when a move cannot be determined 
 	function getRandomMove(position) {
+		let moves = ["left", "up", "right", "down"];
+		let shuffledMoves = [];
 
-		let out;
-
-		let i=0;
-		let foundNextMove = false;
-		while (!foundNextMove) {
-
-
-			//if nothing after 6 attempts, do the default move;
-			//tell the return object that this was not successful, and to not add it to the path.
-			if (i > 15) {
-				foundNextMove = true;
-				out = 'left';
-				continue;
-			}
-
-			let randomMove;
-			var n = Math.random() * 4 >> 0;
-			if (n == 0) randomMove = "left";
-			if (n == 1) randomMove = "up";
-			if (n == 2) randomMove = "right";
-			if (n == 3) randomMove = "down";
-
-
-			let targetPosition = getNextPosition(position, randomMove);
-
-			//test if this is walkable
-			let isWalkable = walkable.has(JSON.stringify(targetPosition));
-
-			if (isWalkable) {
-
-				let isStaircase = staircase.has(JSON.stringify(targetPosition));
-				if (!isStaircase) {
-					foundNextMove = true;
-					out = randomMove;
-				}
-
-			} 
-
-			i++;
+		// Shuffle the moves array
+		while (moves.length > 0) {
+			let randomIndex = Math.floor(Math.random() * moves.length);
+			shuffledMoves.push(moves.splice(randomIndex, 1)[0]);
 		}
 
-		return out;
+		//find a valid move and return it
+		for (let move of shuffledMoves) {
+			let targetPosition = getNextPosition(position, move);
+			if (walkable.has(JSON.stringify(targetPosition)) && !staircase.has(JSON.stringify(targetPosition))) {
+				return move;
+			}
+		}
 	}
-
 
 	//this is called when you get to the staircase starting position
 	//decide what to do: return the moves to place the next block, AND return to the starting position.
-	function buildNextStair(position) {
-
-
-		//update the target stair level
-		//get valid stairs
+	function buildNextStair() {
 		let eligibleStairs = 0;
 		for (let [key, value] of staircase) {
 			if (value.level >= targetStairLevel && value.currentLevel < targetStairLevel) {
-				if (value.level == value.currentLevel) {
-					continue;
-				} else {
-					eligibleStairs++;
-				}
+				eligibleStairs++;
 			}
-
 		}
-		//if there is nothing left to update, start building the next stair level.
+
 		if (eligibleStairs === 0) {
 			targetStairLevel++;
 		}
 
 		let moves = [];
-
-		//find the next block location on the staircase
 		for (let [key, value] of staircase) {
-
-			//if this stair is unsatisfied. place the block here
 			if (value.level >= targetStairLevel && value.currentLevel < targetStairLevel) {
-				//find the moves required to get from staircase start to this block
-				
-				//avoid stacking above a staircase's target level
-				if (value.level == value.currentLevel) continue;
-				
-				//build the set of following moves required to place this block at its 
-				//designated spot on the staircase.
+
 				let route = value.route;
-				if (route[0] === '') {//the start of the staircase
+				if (route[0] === '') {
 					moves.push('drop');
-					break;
 				}
+				else {
+					moves = [...route, 'drop'];
 
-				moves = moves.concat(route);
-				moves.push('drop');
-				if (targetStairLevel < 7) {
-					let reversedRoute = reverseMoves(route);
-					moves = moves.concat(reversedRoute);
-				} else {//if this is the final stair, climb it at the end instead of going back.
-					moves.push(climbTower);//WIN
+					if (targetStairLevel < 7) {
+						let reversedRoute = reverseMoves(route);
+						moves = [...moves, ...reversedRoute];
+					} else {
+						moves.push(climbTower); //WIN
+					}
 				}
-
-				break;
+				break; // Ensure only the first valid stair is processed
 			}
-
 		}
 
 		return moves;
 	}
 
+	//finds a route from point a to point b
+	//where the path is walkable
 	function findShortestPath(start, end) {
-
-		if (!end) {
-			let randomMove = getRandomMove(start);
-			return [randomMove];
-		}
 
 		let newPath = [start]; // Initialize the path with the start point
 		let deadEnds2 = [];     // Initialize an empty array for dead ends
-		
+
 		let output = recursivePath(newPath, end, deadEnds2);
 		if (output?.length === 1) {//if it couldn't find a walkable path from start to end
 			//in this case, just do something random and hope it gets un-stuck.
@@ -532,103 +462,91 @@ function Stacker() {
 			}
 		}
 
-		if (moves.length === 0) {
-			console.log('UNABLE TO FIND MOVES!');
-			let randomMove = getRandomMove(start);
-			moves.push(randomMove);
-		}
-
 		return moves;
 	}
 
+	//recursive helper for finding the shortest path. does a kind of DFS to route from 1 coordinate to another.
 	function recursivePath(newPath, end, deadEnds2) {
-		try {
-			let start = newPath[newPath.length - 1];
+		let start = newPath[newPath.length - 1];
+
+		if (!end) {
+			let randomMove = getRandomMove(start);
+			return [randomMove];
+		}
 		
+		// if we are currently at the end coordinates, return the path taken to get here.
+		if (start[0] === end[0] && start[1] === end[1]) {
+			return newPath;
+		}
+
+
+		//what are the available options for us to move to?
+		//added in order of best to worst
+		//it tries to get closer to the 'end' coordinates first,
+		//and if it can't get directly closer, advance to another tile and see if a path can be found from there.
+		let goodMoves = new Set();
+
+		let [xDiff, yDiff] = [Math.sign(end[0] - start[0]), Math.sign(end[1] - start[1])];
+		goodMoves.add(JSON.stringify([start[0] + xDiff, start[1]]));
+		goodMoves.add(JSON.stringify([start[0], start[1] + yDiff]));
+		goodMoves.add(JSON.stringify([start[0] - xDiff, start[1]]));
+		goodMoves.add(JSON.stringify([start[0], start[1] - yDiff]));
+
+		if (xDiff === 0) {
+			goodMoves.add(JSON.stringify([start[0] + 1, start[1]]));
+			goodMoves.add(JSON.stringify([start[0] - 1, start[1]]));
+		}
+		if (yDiff === 0) {
+			goodMoves.add(JSON.stringify([start[0], start[1] + 1]));
+			goodMoves.add(JSON.stringify([start[0], start[1] - 1]));
+		}
+
+
+		//attempt to move in each of the 'goodMoves' directions
+		let invalidMoves = 0;
+		for (let move of goodMoves) {
+			move = JSON.parse(move);
+
+			//make sure this tile is not a dead end
+			let isDeadEnd = deadEnds2.find(p => p[0] === move[0] && p[1] === move[1]);
+			if (isDeadEnd) {
+				invalidMoves++;
+				continue;
+			}
+
 			// Check if the current position is the end position
-			if(start[0] === end[0] && start[1] === end[1]) {
+			if (move[0] === end[0] && move[1] === end[1]) {
+				newPath.push(move);
 				return newPath;
 			}
 
-			let xDiff = end[0] - start[0] > 0 ? 1 : (end[0] - start[0] === 0 ? 0 : -1);
-			let yDiff = end[1] - start[1] > 0 ? 1 : (end[1] - start[1] === 0 ? 0 : -1);
-		
-			// potential next moves: in order of preference
-			let goodMoves = new Set();
+			let isWalkable = walkable.has(JSON.stringify(move));//can this tile be walked over
+			let alreadyThere = newPath.find(p => p[0] === move[0] && p[1] === move[1]);//is this tile already in our path
+			let isStaircase = staircase.get(JSON.stringify(move));//is this a staircase tile
 
-			goodMoves.add(JSON.stringify([start[0] + xDiff, start[1]]));
-			goodMoves.add(JSON.stringify([start[0]        , start[1] + yDiff]));
-			goodMoves.add(JSON.stringify([start[0] - xDiff, start[1]]));
-			goodMoves.add(JSON.stringify([start[0]        , start[1] - yDiff]));
-
-			if (xDiff === 0) {
-				goodMoves.add(JSON.stringify([start[0] + 1, start[1]]));
-				goodMoves.add(JSON.stringify([start[0] - 1, start[1]]));
-			} 
-			if (yDiff === 0) {
-				goodMoves.add(JSON.stringify([start[0], start[1] + 1]));
-				goodMoves.add(JSON.stringify([start[0], start[1] - 1]));
+			//if this tile is walkable & its not already in the path & its not a staircase tile *unless the staircase is still on step 1*
+			if (isWalkable && !alreadyThere && !isDeadEnd && (!isStaircase || isStaircase?.currentLevel <= 1)) {
+				//add it to the path
+				newPath.push(move);
+				return recursivePath(newPath, end, deadEnds2);
+			} else {
+				invalidMoves++;
 			}
-		
-			let invalidMoves = 0;
-			for (let move of goodMoves) {
-				move = JSON.parse(move);
-
-				//make sure this tile is not a dead end
-				let isDeadEnd = deadEnds2.find(p => p[0] === move[0] && p[1] === move[1]);
-				if (isDeadEnd) {
-					invalidMoves++;
-					continue;
-				}
-
-				// Check if the current position is the end position
-				if(move[0] === end[0] && move[1] === end[1]) {
-					newPath.push(move);
-					return newPath;
-				}
-
-				//is this tile walkable?
-				let isWalkable = walkable.has(JSON.stringify(move));
-				//let isWalkable = false;
-
-				//make sure this tile is not already in the path.
-				let alreadyThere = newPath.find(p => p[0] === move[0] && p[1] === move[1]);
-				
-
-				//make sure this tile is not a staircase
-				let isStaircase = staircase.get(JSON.stringify(move));
-
-				//if this tile is walkable & its not already in the path & its not a staircase tile
-				if ((isWalkable) && !alreadyThere && (!isDeadEnd) && (!isStaircase || isStaircase?.currentLevel <= 1)) {
-
-					//add it to the path
-					newPath.push(move);
-
-					return recursivePath(newPath, end, deadEnds2);
-				} else {
-					invalidMoves++;
-				}
-			}
-		
-			if (invalidMoves === goodMoves.size) {
-				// if no valid move, remove the latest attempt and go back
-				//if there are no more valid moves from this starting point, go to the next valid square.
-				if (newPath.length === 1) {
-
-					//return the failed path with only 1 element.
-					return newPath;
-				} else {
-					let deadEnd = newPath.pop();
-					deadEnds2.push(deadEnd);
-					return recursivePath(newPath, end, deadEnds2);
-				}
-
-			}
-
-		} catch (e) {
-			console.log(e);
-			return [newPath[0]];
 		}
+
+		//if every move at these coordinates were invalid, mark it as a dead end and go back
+		if (invalidMoves === goodMoves.size) {
+			if (newPath.length === 1) {
+				//if there are no valid moves and we're back at the starting element, return a single-element path.
+				//case: failed to find a path from 'start' coordinates to 'end' coordinates
+				return newPath;
+			} else {
+				let deadEnd = newPath.pop();
+				deadEnds2.push(deadEnd);
+				return recursivePath(newPath, end, deadEnds2);
+			}
+		}
+
 	}
 
 }
