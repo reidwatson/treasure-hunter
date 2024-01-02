@@ -17,7 +17,7 @@ function Stacker() {
 	let staircaseCoords;//refers to the start of the staircase, so we can route back to it whenever.
 	let holdingBlock = false;//are we currently carrying a block?
 
-	const minimumBlocksToFind = 28;//minimum block amount is 28. you can set this higher to have it know more available blocks when building the tower.
+	const minimumBlocksToFind = 34;//minimum block amount is 28. you can set this higher to have it know more available blocks when building the tower.
 	let towerSweep = [];//instructions for scoping out the tower when discovered
 	let targetStairLevel = 1;//what layer of the staircase are we currently working on?
 	let climbTower;//inscructions for climbing the tower once the staircase is complete
