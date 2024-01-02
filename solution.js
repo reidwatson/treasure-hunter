@@ -27,21 +27,38 @@ function Stacker() {
 
 	let towerSweep = [];
 
-	let foundEnoughBlocks = false;
+	const minimumBlocksToFind = 34;
 
 	let climbTower;
-
-	let abortMission = false;
 
 		//this needs to be initialized to 1 (build level 1)
 	//and set to 2 once 1 is complete, and so on until level 7 is complete.
 	let targetStairLevel = 1;
 
+
+
+	this.turn = function (cell) {
+
+		let turn = getNextTurn(cell);
+
+		//manage the 'path' variable if we are moving to a new position.
+		if (turn !== 'pickup' && turn !== 'drop') {
+			let currentPosition = path[path.length - 1];
+			let nextPosition = getNextPosition(currentPosition, turn);
+			path = path.concat([nextPosition]);
+		} else {
+			//toggle the 'are we holding a block rn' boolean
+			holdingBlock = !holdingBlock;
+		}
+
+		return turn;
+	}
+
+	//decides what to do next.
 	function getNextTurn(cell) {
 
 		let currentPosition = path[path.length - 1];
 
-		// Mark as visited
 		visited.add(JSON.stringify(currentPosition));
 
 		//evaluate what can be seen in this state
@@ -105,41 +122,16 @@ function Stacker() {
 		//do any predetermined moves
 		if (nextMoves.length > 0) {
 
-			if (abortMission) {
-				abortMission = false;
-				nextMoves = [];
-			} else {
+			let theMove = nextMoves[0];
+			nextMoves.shift();
 
-
-				//if we are currently on a staircase position, update its value
-				if (staircase.has(JSON.stringify(currentPosition))) {
-					let thisCell = staircase.get(JSON.stringify(currentPosition));
-					staircase.set(JSON.stringify(currentPosition), { level: thisCell.level, currentLevel: cell.level, route: thisCell.route })
-				}
-
-				let theMove = nextMoves[0];
-				nextMoves.shift();
-
-				// //if this is a directional move, add it to the path.
-				if (theMove !== 'pickup' && theMove !== 'drop') {
-				} else {
-					holdingBlock = !holdingBlock;//toggle this boolean we use for action logic further down
-				}
-
-				return theMove;
-			}
-
+			return theMove;
 		}
 
-		if (blocks.size > 34) {//!foundEnoughBlocks && blocks.size > 34
-			foundEnoughBlocks = true;
-		}
+		//EXPLORE MODE: find the tower OR find more blocks. once found, build the staircase.
+		if (!foundTower || (blocks.size < minimumBlocksToFind)) {
 
-		//CHECK FOR THE TOWER!
-		if (!foundTower || !foundEnoughBlocks) {
-
-
-			// Explore neighbors
+			//Evaluate this block and the neighboring blocks.
 			let encounteredObstacles = 0;
 			for (let direction of ['left', 'up', 'right', 'down']) {
 
@@ -189,119 +181,82 @@ function Stacker() {
 				return direction;
 			}
 		} 
-		else {
-			//TOWER HAS BEEN FOUND
-			//START BUILDING STAIRCASE
 
-			//if we don't have a block in hand, find one
-			if (!holdingBlock) {
+		//FETCH MODE: find the nearest block to fetch, in order to build the staircase
+		else if (!holdingBlock) {
 
-				//if we're currently standing on a block, pick it up and bring it to the staircase
-				if (cell.type == BLOCK && !staircase.get(JSON.stringify(currentPosition))) {//should do staircase.get
-					holdingBlock = true;
-
-					//route to the staircase
-					nextMoves = findShortestPath(currentPosition, staircaseCoords);
-					return 'pickup';
-				}
-
-				// search for a new block
-				let encounteredObstacles = 0;
-				for (let direction of ['left', 'up', 'right', 'down']) {
-
-					let nextPosition = getNextPosition(currentPosition, direction);
-
-					//if the cell being looked at is part of the staircase, don't grab it.
-					if (staircase.get(JSON.stringify(nextPosition))) {
-						continue;
-					}
-
-					//check if the neighbor is a BLOCK of height 1 (grabbable)
-					let isBlock = cell[direction].type == BLOCK;
-
-					//if there is a block adjascent
-					if (isBlock) {
-
-						//go there and pick it up on the next turn.
-						nextMoves.push('pickup');
-						return direction;
-					} else {
-						continue;
-					}
-				}
-
-				//at this point, there was no adjascent block to pick up, and we aren't currently holding one.
-				//so, find the closest block available.
-				let closestBlock = findClosestBlock(currentPosition);
-
-				//route to the block
-				nextMoves = findShortestPath(currentPosition, closestBlock);
-
-				//do the first move of the route to the staircase
-				let theMove = nextMoves[0];
-				nextMoves.shift();
-				return theMove;
-			} 
-			else {//if we do have a block, route to the staircase
-
-				//if we're on the staircase start and holding a block, drop the block on the staircase.
-				if (JSON.stringify(staircaseCoords) === JSON.stringify(currentPosition)) {
-
-
-					if (cell.level === 0) {
-						if (holdingBlock) {
-							holdingBlock = false;
-							
-							//let getStair = staircase.get(JSON.stringify(currentPosition));
-							//staircase.set(JSON.stringify(currentPosition), {level: getStair.level, currentLevel: getStair.currentLevel+1, route: getStair.route});
-
-							return 'drop';
-						}
-					} else {
-						//find the next position which needs this block.
-
-						nextMoves = buildNextStair(currentPosition);
-						if (nextMoves.length === 0) {
-							let randomMove = getRandomMove(currentPosition);
-							nextMoves.push(randomMove);
-						}
-
-						let theMove = nextMoves[0];
-						nextMoves.shift();
-						return theMove;
-
-					}
-				}
+			//if we're currently standing on a block, pick it up and bring it to the staircase
+			if (cell.type == BLOCK && !staircase.get(JSON.stringify(currentPosition))) {//should do staircase.get
 
 				//route to the staircase
 				nextMoves = findShortestPath(currentPosition, staircaseCoords);
+				return 'pickup';
+			}
 
-				//do the first move of the route to the staircase
+			// search for a new block
+			let encounteredObstacles = 0;
+			for (let direction of ['left', 'up', 'right', 'down']) {
+
+				let nextPosition = getNextPosition(currentPosition, direction);
+
+				//if the cell being looked at is part of the staircase, don't grab it.
+				if (staircase.get(JSON.stringify(nextPosition))) {
+					continue;
+				}
+
+				//check if the neighbor is a BLOCK of height 1 (grabbable)
+				let isBlock = cell[direction].type == BLOCK;
+
+				//if there is a block adjascent
+				if (isBlock) {
+
+					//go there and pick it up on the next turn.
+					nextMoves.push('pickup');
+					return direction;
+				} else {
+					continue;
+				}
+			}
+
+			//at this point, there was no adjascent block to pick up, and we aren't currently holding one.
+			//so, find the closest block available.
+			let closestBlock = findClosestBlock(currentPosition);
+
+			//route to the block
+			nextMoves = findShortestPath(currentPosition, closestBlock);
+
+			//do the first move of the route to the staircase
+			let theMove = nextMoves[0];
+			nextMoves.shift();
+			return theMove;
+		} 
+
+		//BUILD MODE: we are holding a block. use it to build the staircase
+		else {
+
+			//are we on the staircase starting block?
+			//if so, route to the next staircase block that needs more blocks.
+			if (JSON.stringify(staircaseCoords) === JSON.stringify(currentPosition)) {
+
+				//get the next moves to build the staircase
+				nextMoves = buildNextStair(currentPosition);
+
 				let theMove = nextMoves[0];
 				nextMoves.shift();
 				return theMove;
 			}
+
+			//if we are not at the staircase, go there.
+			nextMoves = findShortestPath(currentPosition, staircaseCoords);
+
+			//do the first move of the route to the staircase
+			let theMove = nextMoves[0];
+			nextMoves.shift();
+			return theMove;
 		}
-
-		return '';
 	}
 
-
-
-	this.turn = function (cell) {
-
-		let turn = getNextTurn(cell);
-
-		if (turn !== 'pickup' && turn !== 'drop') {
-			let currentPosition = path[path.length - 1];
-			let nextPosition = getNextPosition(currentPosition, turn);
-			path = path.concat([nextPosition]);
-		} 
-
-		return turn;
-	}
-
-
+	//given a coordinate position [x,y] and a direction [up,down,left,right], find what the next coordinate pair would be
 	function getNextPosition(currentPosition, direction) {
 		// Extract x and y coordinates from currentPosition
 		let [x, y] = currentPosition;
@@ -326,8 +281,6 @@ function Stacker() {
 		let closestBlock = null;
 		let minDistance = Infinity;
 
-		let aBlock;
-
 		for (let [key, value] of blocks) {
 			if (!value.available) continue;
 			if (staircase.has(key)) continue;
@@ -348,12 +301,8 @@ function Stacker() {
 		}
 
 		//set this to be cooked
-		if (closestBlock) {
-			let findBlock = blocks.get(JSON.stringify(closestBlock));
-			blocks.set(JSON.stringify(closestBlock), { level: findBlock.level - 1, available: false });
-		} else {
-			return aBlock;
-		}
+		let findBlock = blocks.get(JSON.stringify(closestBlock));
+		blocks.set(JSON.stringify(closestBlock), { level: findBlock.level - 1, available: false });
 		
 
 		return closestBlock;
@@ -374,7 +323,7 @@ function Stacker() {
 				stairs.push({coords: [start[0]-1, start[1]+2], route: ['right','up','up','left','left'] });//stair 6
 				stairs.push({coords: [start[0]-1, start[1]+1], route: ['right','up','up','left','left','down'] });//stair 7
 				towerSweep = ['right','up','up','left','left','down','down','right'];
-				climbTower = ['right','up','up','left','left','down','right'];
+				climbTower = 'right';
 				break;
 			case 'down':
 				stairs.push({coords: [start[0]-1, start[1]],   route: ['left'] });//stair 2
@@ -384,7 +333,7 @@ function Stacker() {
 				stairs.push({coords: [start[0]+1, start[1]-2], route: ['left','down','down','right','right'] });//stair 6
 				stairs.push({coords: [start[0]+1, start[1]-1], route: ['left','down','down','right','right','up'] });//stair 74
 				towerSweep = ['left','down','down','right','right','up','up','left'];
-				climbTower = ['left','down','down','right','right','up','left'];
+				climbTower = 'left';
 				break;
 			case 'left':
 				stairs.push({coords: [start[0], start[1]+1],   route: ['up']});//stair 2
@@ -394,7 +343,7 @@ function Stacker() {
 				stairs.push({coords: [start[0]-2, start[1]-1], route: ['up','left','left','down','down']});//stair 6
 				stairs.push({coords: [start[0]-1, start[1]-1], route: ['up','left','left','down','down','right']});//stair 7
 				towerSweep = ['up','left','left','down','down','right','right','up'];
-				climbTower = ['up','left','left','down','down','right','up'];
+				climbTower = 'up';
 				break;
 			case 'right':
 				stairs.push({coords: [start[0], start[1]-1],   route: ['down']});//stair 2
@@ -404,7 +353,7 @@ function Stacker() {
 				stairs.push({coords: [start[0]+2, start[1]+1], route: ['down','right','right','up','up']});//stair 6
 				stairs.push({coords: [start[0]+1, start[1]+1], route: ['down','right','right','up','up','left']});//stair 7
 				towerSweep = ['down','right','right','up','up','left','left','down'];
-				climbTower = ['down','right','right','up','up','left','down'];
+				climbTower = 'down';
 				break;
 		}
 
@@ -475,36 +424,13 @@ function Stacker() {
 					out = randomMove;
 				}
 
-			} else {
-				//if this is not walkable, tryu something else.
-			}
+			} 
 
 			i++;
 		}
 
-		// //use position to get the x,y coords that are possible, then see if they're walkable
-		// for (let direction of ['left', 'up', 'right', 'down']) {
-
-
-		// 	//is this walkable?
-
-		// 	let target;//what cell are we targeting? current, up, down, left, or right?
-		// 	let targetPosition;//gt the x,y coords of the tile we're evaluating.
-		// 	if (direction === '') {
-		// 		target = cell;
-		// 		targetPosition = currentPosition;
-		// 	} else {
-		// 		target = cell[direction];
-		// 	}
-
-		// }
-
-
 		return out;
 	}
-
-
-
 
 
 	//this is called when you get to the staircase starting position
@@ -556,7 +482,7 @@ function Stacker() {
 					let reversedRoute = reverseMoves(route);
 					moves = moves.concat(reversedRoute);
 				} else {//if this is the final stair, climb it at the end instead of going back.
-					moves.push(climbTower.pop());//WIN
+					moves.push(climbTower);//WIN
 				}
 
 				break;
