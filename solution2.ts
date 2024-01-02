@@ -1,4 +1,4 @@
-class Stacker {
+export class Stacker {
 
     private readonly EMPTY = 0;
     private readonly WALL = 1;
@@ -10,7 +10,7 @@ class Stacker {
     private deadEnds: Set<string>;
     private staircase: Map<string, any>;
     private blocks: Map<string, any>;
-    private path: [number, number][];
+    private path: number[][];
     private nextMoves: string[];
     private foundTower: boolean;
     private staircaseCoords: number[] | undefined;
@@ -41,9 +41,9 @@ class Stacker {
 
 		//manage the 'path' variable if we are moving to a new position.
 		if (turn !== 'pickup' && turn !== 'drop') {
-			let currentPosition = path[path.length - 1];
+			let currentPosition = this.path[this.path.length - 1];
 			let nextPosition = this.getNextPosition(currentPosition, turn);
-			path = path.concat([nextPosition]);
+			this.path = this.path.concat([nextPosition]);
 		} else {
 			//toggle the 'are we holding a block rn' boolean
 			this.holdingBlock = !this.holdingBlock;
@@ -52,7 +52,7 @@ class Stacker {
 		return turn;    }
 
     private getNextTurn(cell: any): string {
-		let currentPosition = path[path.length - 1];
+		let currentPosition = this.path[this.path.length - 1];
 
 		this.visited.add(JSON.stringify(currentPosition));
 
@@ -137,16 +137,16 @@ class Stacker {
 
 						let goBackIndex = 1;
 
-						//backwards transverse to find the most recent path element that isn't a dead end
-						for (let i = path.length - 1; i >= 0; i--) {
-							if (!this.deadEnds.has(JSON.stringify(path[i]))) {//if this isn't a dead end, set its inverted index to the target index to go to.
-								goBackIndex = path.length - 1 - i;
+						//backwards transverse to find the most recent this.path element that isn't a dead end
+						for (let i = this.path.length - 1; i >= 0; i--) {
+							if (!this.deadEnds.has(JSON.stringify(this.path[i]))) {//if this isn't a dead end, set its inverted index to the target index to go to.
+								goBackIndex = this.path.length - 1 - i;
 								break;
 							}
 						}
 
 						while (this.nextMoves.length === 0) {
-							let backPosition = path[path.length - 1 - goBackIndex];
+							let backPosition = this.path[this.path.length - 1 - goBackIndex];
 							if (!this.deadEnds.has(JSON.stringify(backPosition))) {
 								this.nextMoves = this.findShortestPath(currentPosition, backPosition);
 							}
@@ -172,7 +172,7 @@ class Stacker {
 			if (cell.type == this.BLOCK && !this.staircase.get(JSON.stringify(currentPosition))) {//should do staircase.get
 
 				//route to the staircase
-				this.nextMoves = this.findShortestPath(currentPosition, this.staircaseCoords);
+				this.nextMoves = this.findShortestPath(currentPosition, this.staircaseCoords as number[]);
 				return 'pickup';
 			}
 
@@ -227,7 +227,7 @@ class Stacker {
 			}
 
 			//if we are not at the staircase, go there.
-			this.nextMoves = this.findShortestPath(currentPosition, this.staircaseCoords);
+			this.nextMoves = this.findShortestPath(currentPosition, this.staircaseCoords as number[]);
 
 			//do the first move of the route to the staircase
 			return this.doNextMove();
@@ -301,11 +301,11 @@ class Stacker {
 	}
 
 	//hard-code the tower maneuvers since there aren't that many possibilities.
-	private generateStaircaseCoords(start, towerDirection, cell) {
+	private generateStaircaseCoords(start: number[], towerDirection: string, cell: any) {
 		let staircaseMap = new Map();
 		staircaseMap.set(JSON.stringify(start), { level: 1, currentLevel: cell.level, route: [''] });
 
-		let stairs = <any>[];
+		let stairs: any[] = [];
 		switch (towerDirection) {
 			case 'up':
 				stairs.push({ coords: [start[0] + 1, start[1]], route: ['right'] });//stair 2
@@ -359,8 +359,8 @@ class Stacker {
 
 
 	//takes in a path of moves and reverses them.
-	private reverseMoves(moves) {
-		const oppositeMoves = {
+	private reverseMoves(moves: string[]) {
+		const oppositeMoves:any = {
 			'up': 'down',
 			'down': 'up',
 			'left': 'right',
@@ -372,7 +372,7 @@ class Stacker {
 	}
 
 	//get a random move for your current position. used as an insurance for when a move cannot be determined 
-	private getRandomMove(position): string {
+	private getRandomMove(position: number[]): string {
 		let out = '';
 		let moves = ["left", "up", "right", "down"];
 		let shuffledMoves: string[] = [];
@@ -437,10 +437,10 @@ class Stacker {
 
 	//finds a route from point a to point b
 	//where the path is walkable
-	private findShortestPath(start, end) {
+	private findShortestPath(start: number[], end: number[]) {
 
 		let newPath = [start]; // Initialize the path with the start point
-		let deadEnds2 = [];     // Initialize an empty array for dead ends
+		let deadEnds2: number[][] = [];     // Initialize an empty array for dead ends
 
 		let output = this.recursivePath(newPath, end, deadEnds2);
 		if (output?.length === 1) {//if it couldn't find a walkable path from start to end
@@ -475,7 +475,7 @@ class Stacker {
 	}
 
 	//recursive helper for finding the shortest path. does a kind of DFS to route from 1 coordinate to another.
-	private recursivePath(newPath, end, deadEnds2) {
+	private recursivePath(newPath: number[][], end: any, deadEnds2: number[][]):any {
 		let start = newPath[newPath.length - 1];
 
 		if (!end) {
@@ -513,8 +513,8 @@ class Stacker {
 
 		//attempt to move in each of the 'goodMoves' directions
 		let invalidMoves = 0;
-		for (let move of goodMoves) {
-			move = JSON.parse(move);
+		for (let m of goodMoves) {
+			let move = JSON.parse(m);
 
 			//make sure this tile is not a dead end
 			let isDeadEnd = deadEnds2.find(p => p[0] === move[0] && p[1] === move[1]);
@@ -530,7 +530,7 @@ class Stacker {
 			}
 
 			let isWalkable = this.walkable.has(JSON.stringify(move));//can this tile be walked over
-			let alreadyThere = newPath.find(p => p[0] === move[0] && p[1] === move[1]);//is this tile already in our path
+			let alreadyThere = newPath.find((p:any) => p[0] === move[0] && p[1] === move[1]);//is this tile already in our path
 			let isStaircase = this.staircase.get(JSON.stringify(move));//is this a staircase tile
 
 			//if this tile is walkable & its not already in the path & its not a staircase tile *unless the staircase is still on step 1*
@@ -551,7 +551,7 @@ class Stacker {
 				return newPath;
 			} else {
 				let deadEnd = newPath.pop();
-				deadEnds2.push(deadEnd);
+				deadEnds2.push(deadEnd as number[]);
 				return this.recursivePath(newPath, end, deadEnds2);
 			}
 		}
