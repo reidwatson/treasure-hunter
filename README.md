@@ -19,6 +19,14 @@ So, it is pretty fast from an execution standpoint, but could be more efficient 
 
 ---
 
+Video of execution:
+
+https://github.com/reidwatson/treasure-hunter/assets/65178364/4cd0dd1e-524d-4e0c-b0fe-e3d31b6928ae
+
+
+---
+
+
 Areas that could be improved:
 
 - The pathfinding function, 'findShortestPath' and its companion 'recursivePath'. If you watch it run, it often takes sub-optimal routes when going from point a to point b. I tried to make it find as many possible paths as it could and take the shortest one, but it didn't improve the average 'turns' and made it run a lot slower.
